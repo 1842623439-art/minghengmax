@@ -1,0 +1,2298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>材料成本计算器 - A/B层分离</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* 保持所有原始CSS样式不变 */
+        :root {
+            --primary-color: #007AFF;
+            --primary-light: #E6F2FF;
+            --secondary-color: #5856D6;
+            --success-color: #34C759;
+            --warning-color: #FF9500;
+            --danger-color: #FF3B30;
+            --bg-color: #F5F5F7;
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --text-primary: #1D1D1F;
+            --text-secondary: #86868B;
+            --border-color: rgba(0, 0, 0, 0.1);
+            --shadow-light: 0 8px 30px rgba(0, 0, 0, 0.08);
+            --shadow-medium: 0 4px 12px rgba(0, 0, 0, 0.05);
+            --spacing-xs: 8px;
+            --spacing-sm: 12px;
+            --spacing-md: 16px;
+            --spacing-lg: 20px;
+            --spacing-xl: 24px;
+            --border-radius-sm: 8px;
+            --border-radius-md: 12px;
+            --border-radius-lg: 16px;
+            --border-radius-xl: 20px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: var(--spacing-sm);
+            line-height: 1.5;
+            background-image: 
+                radial-gradient(at 10% 20%, rgba(120, 119, 198, 0.08) 0px, transparent 50%),
+                radial-gradient(at 90% 80%, rgba(255, 119, 198, 0.05) 0px, transparent 50%);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border-radius: var(--border-radius-xl);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: var(--shadow-light);
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .glass-card:hover {
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: var(--spacing-xl);
+            padding-top: var(--spacing-sm);
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .subtitle {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .main-section {
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .layer-section {
+            width: 100%;
+            padding: var(--spacing-md);
+            position: relative;
+        }
+
+        .layer-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--spacing-md);
+            padding-bottom: var(--spacing-xs);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .layer-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+
+        .layer-badge {
+            padding: 4px 8px;
+            border-radius: 16px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .layer-a .layer-badge {
+            background-color: rgba(0, 122, 255, 0.1);
+            color: var(--primary-color);
+        }
+
+        .layer-b .layer-badge {
+            background-color: rgba(88, 86, 214, 0.1);
+            color: var(--secondary-color);
+        }
+
+        .layer-percentage {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .material-list {
+            margin-bottom: var(--spacing-md);
+            overflow: visible;
+        }
+
+        .material-item {
+            padding: var(--spacing-sm);
+            margin-bottom: var(--spacing-sm);
+            border-radius: var(--border-radius-md);
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.7);
+            display: flex;
+            flex-direction: column;
+            transition: all 0.2s ease;
+            animation: fadeIn 0.5s ease;
+            position: relative;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .material-item:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-medium);
+        }
+
+        .material-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 6px;
+        }
+
+        .material-info {
+            flex: 1;
+        }
+
+        .material-name {
+            font-weight: 600;
+            margin-bottom: 2px;
+            font-size: 1rem;
+        }
+
+        .material-description {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .material-price {
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 6px;
+            font-size: 0.9rem;
+        }
+
+        .material-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .material-subtotal {
+            text-align: right;
+            font-weight: 600;
+            color: var(--primary-color);
+            font-size: 0.9rem;
+            line-height: 1.3;
+            margin-bottom: 6px;
+            padding: 2px 0;
+            border-top: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .quantity-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 2px;
+            flex-wrap: nowrap;
+        }
+
+        .quantity-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--primary-color);
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1.2rem;
+            color: white;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .quantity-btn:hover {
+            background-color: #0056CC;
+            transform: scale(1.05);
+        }
+
+        .quantity-input {
+            width: 70px;
+            padding: 10px;
+            text-align: center;
+            border-radius: var(--border-radius-sm);
+            border: 1px solid var(--border-color);
+            font-weight: 600;
+            background-color: white;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+            -moz-appearance: textfield;
+        }
+
+        .quantity-input::-webkit-outer-spin-button,
+        .quantity-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .quantity-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: var(--spacing-xs);
+        }
+
+        .btn-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-edit {
+            background-color: rgba(255, 149, 0, 0.1);
+            color: var(--warning-color);
+        }
+
+        .btn-delete {
+            background-color: rgba(255, 59, 48, 0.1);
+            color: var(--danger-color);
+        }
+
+        .btn-icon:hover {
+            transform: scale(1.05);
+        }
+
+        .btn-add {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: var(--border-radius-md);
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-xs);
+            margin: 0 auto;
+            transition: all 0.2s ease;
+            font-size: 0.95rem;
+            width: 100%;
+            max-width: 280px;
+        }
+
+        .btn-add:hover {
+            background-color: #0056CC;
+            transform: translateY(-2px);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: var(--spacing-lg) var(--spacing-md);
+            color: var(--text-secondary);
+        }
+
+        .empty-state i {
+            font-size: 2.5rem;
+            margin-bottom: var(--spacing-sm);
+            opacity: 0.5;
+        }
+
+        .calculation-section {
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .calculation-card {
+            padding: var(--spacing-md);
+        }
+
+        .calculation-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: var(--spacing-md);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+
+        .calculation-result {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .layer-cost-combined {
+            background-color: white;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-md);
+            padding: var(--spacing-sm);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+
+        .combined-cost-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .combined-cost-item {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: var(--spacing-sm);
+        }
+
+        .combined-cost-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .combined-cost-value {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            line-height: 1.2;
+        }
+
+        .combined-cost-unit {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .material-quantity-display {
+            margin-top: var(--spacing-sm);
+            padding: var(--spacing-sm);
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: var(--border-radius-sm);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .quantity-display-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .quantity-display-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .quantity-display-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            font-size: 0.85rem;
+            border-bottom: 1px dashed rgba(0, 0, 0, 0.05);
+        }
+
+        .quantity-display-item:last-child {
+            border-bottom: none;
+        }
+
+        .quantity-material-name {
+            font-weight: 500;
+            flex: 1;
+        }
+
+        .quantity-material-value {
+            font-weight: 600;
+            color: var(--primary-color);
+            min-width: 60px;
+            text-align: right;
+        }
+
+        .total-cost-container {
+            width: 100%;
+        }
+
+        .total-cost-item {
+            padding: var(--spacing-md);
+            border-radius: var(--border-radius-lg);
+            background-color: var(--primary-light);
+            border: 2px solid var(--primary-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            transition: all 0.3s ease;
+            justify-content: center;
+            min-height: 100px;
+            box-sizing: border-box;
+            width: 100%;
+        }
+
+        .total-cost-item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 122, 255, 0.15);
+        }
+
+        .total-cost-label {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .total-cost-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            line-height: 1.2;
+        }
+
+        .total-cost-unit {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+
+        .controls-section {
+            padding: var(--spacing-md);
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .controls-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: var(--spacing-md);
+        }
+
+        .controls-grid {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-xs);
+        }
+
+        .control-label {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            font-size: 0.95rem;
+        }
+
+        .control-input {
+            padding: 10px;
+            border-radius: var(--border-radius-md);
+            border: 1px solid var(--border-color);
+            font-size: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .control-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+        }
+
+        .unit-toggle {
+            display: flex;
+            border-radius: var(--border-radius-md);
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .unit-option {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            background-color: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
+        }
+
+        .unit-option.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .action-buttons-group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+            margin-top: var(--spacing-md);
+        }
+
+        .action-btn {
+            padding: 12px 16px;
+            border-radius: var(--border-radius-md);
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .action-btn-batch {
+            background-color: var(--warning-color);
+            color: white;
+        }
+
+        .action-btn-batch:hover {
+            background-color: #E58900;
+            transform: translateY(-2px);
+        }
+
+        .action-btn-add {
+            background-color: var(--success-color);
+            color: white;
+        }
+
+        .action-btn-add:hover {
+            background-color: #2DA64F;
+            transform: translateY(-2px);
+        }
+
+        .action-btn-reset {
+            background-color: var(--danger-color);
+            color: white;
+        }
+
+        .action-btn-reset:hover {
+            background-color: #E02B20;
+            transform: translateY(-2px);
+        }
+
+        .action-btn-export {
+            background-color: var(--secondary-color);
+            color: white;
+        }
+
+        .action-btn-export:hover {
+            background-color: #4A48C4;
+            transform: translateY(-2px);
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+            padding: var(--spacing-md);
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            width: 100%;
+            max-width: 500px;
+            padding: var(--spacing-lg);
+            border-radius: var(--border-radius-xl);
+            transform: translateY(30px);
+            transition: transform 0.3s ease;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal.active .modal-content {
+            transform: translateY(0);
+        }
+
+        .modal-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: var(--spacing-md);
+        }
+
+        .form-group {
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px;
+            border-radius: var(--border-radius-md);
+            border: 1px solid var(--border-color);
+            font-size: 1rem;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: var(--spacing-sm);
+            margin-top: var(--spacing-md);
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border-radius: var(--border-radius-md);
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.95rem;
+        }
+
+        .btn-secondary {
+            background-color: #F2F2F7;
+            color: var(--text-primary);
+        }
+
+        .btn-secondary:hover {
+            background-color: #E5E5EA;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #0056CC;
+        }
+
+        .batch-edit-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            padding: var(--spacing-sm);
+            background-color: rgba(255, 255, 255, 0.5);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .batch-edit-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--spacing-xs) 0;
+            border-bottom: 1px dashed var(--border-color);
+        }
+
+        .batch-edit-item:last-child {
+            border-bottom: none;
+        }
+
+        .batch-edit-info {
+            flex: 1;
+        }
+
+        .batch-edit-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        .batch-edit-layer {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .batch-edit-input {
+            width: 100px;
+            padding: 6px;
+            border-radius: var(--border-radius-sm);
+            border: 1px solid var(--border-color);
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .batch-edit-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .batch-add-area {
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            padding: var(--spacing-sm);
+            background-color: rgba(255, 255, 255, 0.5);
+            margin-bottom: var(--spacing-md);
+            overflow-x: auto;
+        }
+
+        .batch-add-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: var(--spacing-sm);
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .batch-add-input {
+            padding: 8px;
+            border-radius: var(--border-radius-sm);
+            border: 1px solid var(--border-color);
+            font-size: 0.9rem;
+            box-sizing: border-box;
+            flex-shrink: 1;
+            min-width: 0;
+        }
+
+        .batch-add-input.name-input {
+            flex: 1;
+            max-width: 60%;
+        }
+
+        .batch-add-input.price-input {
+            flex: 0 0 80px;
+            width: 80px;
+        }
+
+        .batch-add-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .batch-add-remove {
+            width: 36px;
+            height: 36px;
+            background-color: rgba(255, 59, 48, 0.1);
+            color: var(--danger-color);
+            border: none;
+            border-radius: var(--border-radius-sm);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .batch-add-add {
+            width: 100%;
+            padding: 10px;
+            background-color: rgba(0, 122, 255, 0.1);
+            color: var(--primary-color);
+            border: 1px dashed var(--primary-color);
+            border-radius: var(--border-radius-sm);
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: var(--spacing-xs);
+        }
+
+        footer {
+            text-align: center;
+            padding: var(--spacing-md);
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            border-top: 1px solid var(--border-color);
+            margin-top: var(--spacing-lg);
+            line-height: 1.4;
+        }
+
+        @media (min-width: 768px) {
+            body {
+                padding: var(--spacing-md);
+            }
+            
+            .container {
+                max-width: 768px;
+            }
+            
+            h1 {
+                font-size: 2.2rem;
+            }
+            
+            .action-buttons-group {
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+            
+            .action-btn {
+                flex: 1;
+                min-width: 150px;
+            }
+            
+            .controls-grid {
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+            
+            .control-group {
+                flex: 1;
+                min-width: 200px;
+            }
+            
+            .batch-add-input.name-input {
+                max-width: 70%;
+            }
+            
+            .batch-add-input.price-input {
+                flex: 0 0 100px;
+                width: 100px;
+            }
+        }
+
+        @media (max-width: 375px) {
+            .batch-add-row {
+                gap: 6px;
+            }
+            
+            .batch-add-input.name-input {
+                max-width: 55%;
+            }
+            
+            .batch-add-input.price-input {
+                flex: 0 0 70px;
+                width: 70px;
+                font-size: 0.85rem;
+            }
+            
+            .batch-add-remove {
+                width: 32px;
+                height: 32px;
+                font-size: 0.8rem;
+            }
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .pulse {
+            animation: pulse 0.5s ease;
+        }
+        
+        @media (hover: none) {
+            .quantity-btn:hover,
+            .btn-icon:hover,
+            .btn-add:hover,
+            .btn:hover,
+            .material-item:hover,
+            .total-cost-item:hover,
+            .action-btn:hover {
+                transform: none;
+            }
+            
+            .quantity-btn:active,
+            .btn-icon:active,
+            .btn-add:active,
+            .btn:active,
+            .action-btn:active {
+                transform: scale(0.95);
+            }
+        }
+        
+        /* ========== 重新设计的iOS风格浮动通知 ========== */
+        .notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            width: 90%;
+            max-width: 420px;
+            padding: 16px 20px 16px 16px;
+            border-radius: 16px;
+            backdrop-filter: blur(30px) saturate(180%);
+            -webkit-backdrop-filter: blur(30px) saturate(180%);
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+            z-index: 2000;
+            opacity: 0;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            border-left: 6px solid var(--primary-color);
+        }
+        
+        .notification.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+        
+        .notification.border-up {
+            border-left-color: #FF3B30;
+        }
+        
+        .notification.border-down {
+            border-left-color: #34C759;
+        }
+        
+        .notification-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        
+        .notification-icon.up {
+            background-color: rgba(255, 59, 48, 0.15);
+            color: #FF3B30;
+        }
+        
+        .notification-icon.down {
+            background-color: rgba(52, 199, 89, 0.15);
+            color: #34C759;
+        }
+        
+        .notification-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 4px;
+        }
+        
+        .notification-first-line {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: baseline;
+            gap: 4px;
+        }
+        
+        .notification-second-line {
+            font-size: 0.95rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        
+        .notification-price {
+            font-size: 1.3rem;
+            font-weight: 800;
+        }
+        
+        .notification-price.up {
+            color: #FF3B30;
+        }
+        
+        .notification-price.down {
+            color: #34C759;
+        }
+        
+        .notification-change {
+            font-size: 1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .notification-change.up {
+            color: #FF3B30;
+        }
+        
+        .notification-change.down {
+            color: #34C759;
+        }
+        
+        /* 修改：调整金额字体大小，使其和前面的"上涨了/下降了"一样大 */
+        .notification-amount {
+            font-weight: 800;
+            color: #000000;
+            font-size: 1rem; /* 修改为1rem，和notification-change一样大 */
+            margin: 0 4px;
+        }
+        
+        .notification-percentage {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .notification-percentage.up {
+            background-color: rgba(255, 59, 48, 0.1);
+            color: #FF3B30;
+        }
+        
+        .notification-percentage.down {
+            background-color: rgba(52, 199, 89, 0.1);
+            color: #34C759;
+        }
+        
+        .notification-close {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(0, 0, 0, 0.05);
+            color: var(--text-secondary);
+            cursor: pointer;
+            border: none;
+            font-size: 0.9rem;
+            z-index: 10;
+        }
+        
+        .notification-close:hover {
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+        
+        @keyframes slideInUp {
+            from {
+                transform: translateX(-50%) translateY(-100px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideOutUp {
+            from {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(-50%) translateY(-100px);
+                opacity: 0;
+            }
+        }
+        
+        /* 修复输入框样式 */
+        .quantity-input-container {
+            position: relative;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>材料成本计算器</h1>
+            <p class="subtitle">A/B层成本分离计算系统 - 支持数据持久化、批量编辑和导出功能</p>
+        </header>
+
+        <!-- A层材料管理 -->
+        <section class="layer-section glass-card main-section layer-a">
+            <div class="layer-header">
+                <div class="layer-title">
+                    <i class="fas fa-layer-group"></i>
+                    A层材料
+                    <span class="layer-badge">占总成本40%</span>
+                </div>
+                <div class="layer-percentage">400公斤/吨</div>
+            </div>
+            
+            <div class="material-list" id="material-list-a">
+                <!-- A层材料将通过JS动态添加 -->
+            </div>
+            
+            <button class="btn-add" id="add-material-a">
+                <i class="fas fa-plus"></i> 添加A层材料
+            </button>
+        </section>
+
+        <!-- B层材料管理 -->
+        <section class="layer-section glass-card main-section layer-b">
+            <div class="layer-header">
+                <div class="layer-title">
+                    <i class="fas fa-layer-group"></i>
+                    B层材料
+                    <span class="layer-badge">占总成本60%</span>
+                </div>
+                <div class="layer-percentage">600公斤/吨</div>
+            </div>
+            
+            <div class="material-list" id="material-list-b">
+                <!-- B层材料将通过JS动态添加 -->
+            </div>
+            
+            <button class="btn-add" id="add-material-b">
+                <i class="fas fa-plus"></i> 添加B层材料
+            </button>
+        </section>
+
+        <!-- 成本计算结果 -->
+        <section class="calculation-card glass-card main-section">
+            <h2 class="calculation-title">
+                <i class="fas fa-calculator"></i> 成本计算结果
+            </h2>
+            
+            <div class="calculation-result">
+                <!-- A层成本合并显示 -->
+                <div class="layer-cost-combined">
+                    <div class="combined-cost-row">
+                        <div class="combined-cost-item">
+                            <div class="combined-cost-label">A层总成本</div>
+                            <div class="combined-cost-value" id="total-cost-a">¥0.00</div>
+                            <div class="combined-cost-unit">(400公斤)</div>
+                        </div>
+                        <div class="combined-cost-item">
+                            <div class="combined-cost-label">A层每公斤成本</div>
+                            <div class="combined-cost-value" id="per-kg-cost-a">¥0.00</div>
+                            <div class="combined-cost-unit">元/公斤</div>
+                        </div>
+                    </div>
+                    
+                    <!-- A层材料包数显示 -->
+                    <div class="material-quantity-display">
+                        <div class="quantity-display-title">A层材料包数</div>
+                        <div class="quantity-display-list" id="quantity-list-a">
+                            <!-- 这里将显示A层各材料的包数 -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- B层成本合并显示 -->
+                <div class="layer-cost-combined">
+                    <div class="combined-cost-row">
+                        <div class="combined-cost-item">
+                            <div class="combined-cost-label">B层总成本</div>
+                            <div class="combined-cost-value" id="total-cost-b">¥0.00</div>
+                            <div class="combined-cost-unit">(600公斤)</div>
+                        </div>
+                        <div class="combined-cost-item">
+                            <div class="combined-cost-label">B层每公斤成本</div>
+                            <div class="combined-cost-value" id="per-kg-cost-b">¥0.00</div>
+                            <div class="combined-cost-unit">元/公斤</div>
+                        </div>
+                    </div>
+                    
+                    <!-- B层材料包数显示 -->
+                    <div class="material-quantity-display">
+                        <div class="quantity-display-title">B层材料包数</div>
+                        <div class="quantity-display-list" id="quantity-list-b">
+                            <!-- 这里将显示B层各材料的包数 -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 每吨总成本区域 -->
+                <div class="total-cost-container">
+                    <div class="total-cost-item">
+                        <div class="total-cost-label">每吨总成本</div>
+                        <div class="total-cost-value" id="total-cost-per-ton">¥0.00</div>
+                        <div class="total-cost-unit">1吨 = 1000公斤 (A层400kg + B层600kg)</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 批量控制和单价设置 -->
+        <section class="controls-section glass-card main-section">
+            <h2 class="controls-title">
+                <i class="fas fa-sliders-h"></i> 批量控制与高级功能
+            </h2>
+            
+            <div class="controls-grid">
+                <div class="control-group">
+                    <label class="control-label">
+                        <i class="fas fa-balance-scale"></i> 每包标准重量
+                    </label>
+                    <input type="text" class="control-input" value="25 公斤" readonly>
+                    <small>标准包重量，用于单价转换</small>
+                </div>
+                
+                <div class="control-group">
+                    <label class="control-label">
+                        <i class="fas fa-exchange-alt"></i> 单价输入方式
+                    </label>
+                    <div class="unit-toggle" id="unit-toggle">
+                        <div class="unit-option active" data-unit="per-kg">元/公斤</div>
+                        <div class="unit-option" data-unit="per-pack">元/包</div>
+                    </div>
+                    <small>选择单价输入方式，系统会自动转换</small>
+                </div>
+            </div>
+            
+            <!-- 新功能按钮组 -->
+            <div class="action-buttons-group">
+                <button class="action-btn action-btn-batch" id="batch-edit-btn">
+                    <i class="fas fa-edit"></i> 批量编辑价格
+                </button>
+                <button class="action-btn action-btn-add" id="batch-add-btn">
+                    <i class="fas fa-plus-circle"></i> 批量添加材料
+                </button>
+                <button class="action-btn action-btn-reset" id="reset-btn">
+                    <i class="fas fa-redo"></i> 重置数据
+                </button>
+                <button class="action-btn action-btn-export" id="export-btn">
+                    <i class="fas fa-download"></i> 导出数据
+                </button>
+            </div>
+        </section>
+        
+        <footer>
+            <p>材料成本计算器 &copy; 2023 | 基于A/B层成本分离计算 (A层40%: 400公斤/吨, B层60%: 600公斤/吨)</p>
+            <p>每包标准：25公斤 | 支持元/公斤和元/包两种单价输入方式 | 数据自动保存</p>
+        </footer>
+    </div>
+
+    <!-- 重新设计的iOS风格浮动通知 -->
+    <div class="notification" id="cost-notification">
+        <div class="notification-icon" id="notification-icon">
+            <i class="fas fa-arrow-up" id="notification-arrow"></i>
+        </div>
+        <div class="notification-content">
+            <div class="notification-first-line">
+                <span>总成本</span>
+                <span class="notification-price" id="notification-price">¥0.00</span>
+                <span>/吨</span>
+            </div>
+            <div class="notification-second-line">
+                <span class="notification-change" id="notification-change">
+                    <i class="fas fa-arrow-up" id="notification-change-arrow"></i>
+                    <span id="notification-change-text">上涨了</span>
+                </span>
+                <span class="notification-amount" id="notification-amount">¥0.00</span>
+                <span class="notification-percentage" id="notification-percentage">0.00%</span>
+            </div>
+        </div>
+        <button class="notification-close" id="notification-close">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <!-- 添加/编辑材料模态框 -->
+    <div class="modal" id="material-modal">
+        <div class="modal-content glass-card">
+            <h2 class="modal-title" id="modal-title">添加新材料</h2>
+            
+            <form id="material-form">
+                <div class="form-group">
+                    <label class="form-label" for="material-name">材料名称</label>
+                    <input type="text" class="form-input" id="material-name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="material-price">单价</label>
+                    <input type="number" class="form-input" id="material-price" step="0.01" required>
+                    <small id="price-unit-display">元/公斤 (自动计算：¥0.00/包)</small>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="material-description">材料描述</label>
+                    <input type="text" class="form-input" id="material-description" placeholder="可选：材料规格、供应商等信息">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">所属层</label>
+                    <div class="unit-toggle" id="layer-toggle">
+                        <div class="unit-option active" data-layer="a">A层 (40%)</div>
+                        <div class="unit-option" data-layer="b">B层 (60%)</div>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancel-btn">取消</button>
+                    <button type="submit" class="btn btn-primary">保存材料</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 批量编辑价格模态框 -->
+    <div class="modal" id="batch-edit-modal">
+        <div class="modal-content glass-card">
+            <h2 class="modal-title">批量编辑材料价格</h2>
+            
+            <form id="batch-edit-form">
+                <div class="form-group">
+                    <label class="form-label">编辑范围</label>
+                    <div class="unit-toggle" id="batch-edit-scope">
+                        <div class="unit-option active" data-scope="all">所有材料</div>
+                        <div class="unit-option" data-scope="layer-a">仅A层</div>
+                        <div class="unit-option" data-scope="layer-b">仅B层</div>
+                        <div class="unit-option" data-scope="same-name">同名材料(A/B同时)</div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">价格调整方式</label>
+                    <div class="unit-toggle" id="batch-edit-method">
+                        <div class="unit-option active" data-method="percentage">百分比调整 (%)</div>
+                        <div class="unit-option" data-method="fixed">固定值调整 (元)</div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="batch-edit-value">调整值</label>
+                    <input type="number" class="form-input" id="batch-edit-value" step="0.01" value="0">
+                    <small id="batch-edit-hint">输入正数增加价格，负数降低价格</small>
+                </div>
+                
+                <!-- 材料列表显示 -->
+                <div class="batch-edit-list" id="batch-edit-list">
+                    <!-- 材料列表将通过JS动态添加 -->
+                </div>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="batch-edit-cancel-btn">取消</button>
+                    <button type="submit" class="btn btn-primary">应用批量调整</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 批量添加材料模态框 -->
+    <div class="modal" id="batch-add-modal">
+        <div class="modal-content glass-card">
+            <h2 class="modal-title">批量添加材料</h2>
+            
+            <form id="batch-add-form">
+                <div class="form-group">
+                    <label class="form-label">添加方式</label>
+                    <div class="unit-toggle" id="batch-add-method">
+                        <div class="unit-option active" data-method="single">单层添加</div>
+                        <div class="unit-option" data-method="both">A/B层同时添加</div>
+                    </div>
+                </div>
+                
+                <div class="form-group" id="batch-add-layer-group">
+                    <label class="form-label">所属层</label>
+                    <div class="unit-toggle" id="batch-add-layer">
+                        <div class="unit-option active" data-layer="a">A层 (40%)</div>
+                        <div class="unit-option" data-layer="b">B层 (60%)</div>
+                    </div>
+                </div>
+                
+                <!-- 批量添加区域 -->
+                <div class="batch-add-area" id="batch-add-area">
+                    <div class="batch-add-row">
+                        <input type="text" class="batch-add-input name-input" placeholder="材料名称">
+                        <input type="number" class="batch-add-input price-input" placeholder="单价" step="0.01">
+                        <button type="button" class="batch-add-remove" style="display: none;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <button type="button" class="batch-add-add" id="add-more-btn">
+                    <i class="fas fa-plus"></i> 添加更多材料行
+                </button>
+                
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="batch-add-cancel-btn">取消</button>
+                    <button type="submit" class="btn btn-primary">批量添加材料</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // ========== 应用状态管理 ==========
+        const appData = {
+            unitType: 'per-kg',
+            materials: {
+                a: [],
+                b: []
+            },
+            nextId: 1,
+            lastTotalCost: 0
+        };
+
+        // ========== 工具函数 ==========
+        function $(selector) {
+            return document.querySelector(selector);
+        }
+        
+        function $$(selector) {
+            return document.querySelectorAll(selector);
+        }
+        
+        function showModal(modalId) {
+            $(modalId).classList.add('active');
+        }
+        
+        function hideModal(modalId) {
+            $(modalId).classList.remove('active');
+        }
+        
+        function saveData() {
+            try {
+                localStorage.setItem('materialCalculator', JSON.stringify(appData));
+            } catch(e) {
+                console.error('保存数据失败:', e);
+            }
+        }
+        
+        function loadData() {
+            try {
+                const saved = localStorage.getItem('materialCalculator');
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    appData.unitType = data.unitType || 'per-kg';
+                    appData.materials = data.materials || { a: [], b: [] };
+                    appData.nextId = data.nextId || 1;
+                    return true;
+                }
+            } catch(e) {
+                console.error('加载数据失败:', e);
+            }
+            return false;
+        }
+        
+        // ========== 重新设计的iOS风格浮动通知 ==========
+        let notificationTimeout = null;
+        
+        function showCostNotification(oldCost, newCost) {
+            if (oldCost === newCost || Math.abs(oldCost - newCost) < 0.01) return;
+            
+            const notification = $('#cost-notification');
+            const change = newCost - oldCost;
+            const percentChange = oldCost > 0 ? (Math.abs(change) / oldCost) * 100 : 0;
+            
+            // 格式化百分比显示
+            let percentDisplay;
+            if (percentChange < 0.1) {
+                percentDisplay = percentChange.toFixed(2);
+            } else {
+                percentDisplay = percentChange.toFixed(1);
+            }
+            
+            // 设置通知内容
+            $('#notification-price').textContent = '¥' + newCost.toFixed(2);
+            $('#notification-percentage').textContent = percentDisplay + '%';
+            
+            // 设置具体金额
+            const changeAmount = Math.abs(change).toFixed(2);
+            $('#notification-amount').textContent = '¥' + changeAmount;
+            
+            // 获取所有需要设置样式的元素
+            const notificationIcon = $('#notification-icon');
+            const notificationArrow = $('#notification-arrow');
+            const notificationPrice = $('#notification-price');
+            const notificationChange = $('#notification-change');
+            const notificationChangeArrow = $('#notification-change-arrow');
+            const notificationChangeText = $('#notification-change-text');
+            
+            if (change > 0) {
+                // 成本上涨 - 红色主题
+                notification.classList.add('border-up');
+                notification.classList.remove('border-down');
+                
+                notificationIcon.className = 'notification-icon up';
+                notificationArrow.className = 'fas fa-arrow-up';
+                
+                notificationPrice.className = 'notification-price up';
+                
+                notificationChange.className = 'notification-change up';
+                notificationChangeArrow.className = 'fas fa-arrow-up';
+                notificationChangeText.textContent = '上涨了';
+                
+                $('#notification-percentage').className = 'notification-percentage up';
+            } else {
+                // 成本下降 - 绿色主题
+                notification.classList.add('border-down');
+                notification.classList.remove('border-up');
+                
+                notificationIcon.className = 'notification-icon down';
+                notificationArrow.className = 'fas fa-arrow-down';
+                
+                notificationPrice.className = 'notification-price down';
+                
+                notificationChange.className = 'notification-change down';
+                notificationChangeArrow.className = 'fas fa-arrow-down';
+                notificationChangeText.textContent = '下降了';
+                
+                $('#notification-percentage').className = 'notification-percentage down';
+            }
+            
+            // 显示通知
+            notification.classList.add('show');
+            
+            // 清除之前的定时器
+            if (notificationTimeout) {
+                clearTimeout(notificationTimeout);
+            }
+            
+            // 4秒后自动隐藏
+            notificationTimeout = setTimeout(() => {
+                notification.classList.remove('show');
+            }, 4000);
+        }
+        
+        // 关闭通知
+        $('#notification-close').addEventListener('click', () => {
+            $('#cost-notification').classList.remove('show');
+            if (notificationTimeout) {
+                clearTimeout(notificationTimeout);
+                notificationTimeout = null;
+            }
+        });
+        
+        // ========== 初始化示例数据 ==========
+        function initSampleData() {
+            // A层数据
+            appData.materials.a = [
+                { id: 1, name: "6095", price: 6.98, description: "", quantity: 2, unit: 'per-kg' },
+                { id: 2, name: "9255", price: 6.6, description: "", quantity: 2, unit: 'per-kg' },
+                { id: 3, name: "7050", price: 6.55, description: "", quantity: 1, unit: 'per-kg' },
+                { id: 4, name: "2426k", price: 8.82, description: "", quantity: 0.5, unit: 'per-kg' }
+            ];
+            
+            // B层数据
+            appData.materials.b = [
+                { id: 5, name: "6095", price: 6.98, description: "", quantity: 2, unit: 'per-kg' },
+                { id: 6, name: "9255", price: 6.6, description: "", quantity: 3, unit: 'per-kg' },
+                { id: 7, name: "7050", price: 6.55, description: "", quantity: 4, unit: 'per-kg' },
+                { id: 8, name: "王华荣白料", price: 5.6, description: "", quantity: 5, unit: 'per-kg' },
+                { id: 9, name: "填充", price: 3.3, description: "", quantity: 3, unit: 'per-kg' }
+            ];
+            
+            appData.nextId = 10;
+            saveData();
+        }
+        
+        // ========== 渲染函数 ==========
+        function renderAll() {
+            const oldCost = appData.lastTotalCost;
+            renderMaterialLists();
+            updateCalculations();
+            
+            // 显示成本变化通知
+            if (oldCost > 0) {
+                const newCost = parseFloat($('#total-cost-per-ton').textContent.replace('¥', ''));
+                showCostNotification(oldCost, newCost);
+            }
+        }
+        
+        function renderMaterialLists() {
+            renderMaterialList('a');
+            renderMaterialList('b');
+            updateQuantityDisplay();
+        }
+        
+        function renderMaterialList(layer) {
+            const list = $(`#material-list-${layer}`);
+            const materials = appData.materials[layer];
+            
+            if (materials.length === 0) {
+                list.innerHTML = `<div class="empty-state"><i class="fas fa-box-open"></i><p>暂无${layer === 'a' ? 'A' : 'B'}层材料</p><p>点击下方添加按钮以添加新材料</p></div>`;
+                return;
+            }
+            
+            list.innerHTML = '';
+            materials.forEach(material => {
+                list.appendChild(createMaterialElement(material, layer));
+            });
+        }
+        
+        function createMaterialElement(material, layer) {
+            const div = document.createElement('div');
+            div.className = 'material-item';
+            div.dataset.id = material.id;
+            
+            let priceDisplay, perPackPrice, perKgPrice;
+            
+            if (appData.unitType === 'per-kg') {
+                perKgPrice = material.price;
+                perPackPrice = material.price * 25;
+                priceDisplay = `¥${perKgPrice.toFixed(2)}/公斤 (¥${perPackPrice.toFixed(2)}/包)`;
+            } else {
+                perPackPrice = material.price;
+                perKgPrice = material.price / 25;
+                priceDisplay = `¥${perPackPrice.toFixed(2)}/包 (¥${perKgPrice.toFixed(2)}/公斤)`;
+            }
+            
+            const subtotal = perKgPrice * material.quantity * 25;
+            const weight = material.quantity * 25;
+            
+            div.innerHTML = `
+                <div class="material-header">
+                    <div class="material-info">
+                        <div class="material-name">${material.name}</div>
+                        <div class="material-description">${material.description || '无描述'}</div>
+                        <div class="material-price">${priceDisplay}</div>
+                    </div>
+                    
+                    <div class="material-actions">
+                        <button class="btn-icon btn-edit" data-id="${material.id}">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn-icon btn-delete" data-id="${material.id}">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="material-subtotal">
+                    <div>小计: ¥${subtotal.toFixed(2)}</div>
+                    <div>${weight.toFixed(1)}公斤</div>
+                </div>
+                
+                <div class="quantity-controls">
+                    <button class="quantity-btn minus-1" data-id="${material.id}">-1</button>
+                    <button class="quantity-btn minus-0.5" data-id="${material.id}">-0.5</button>
+                    <input type="number" class="quantity-input" value="${material.quantity}" step="0.5" min="0" data-id="${material.id}">
+                    <button class="quantity-btn plus-0.5" data-id="${material.id}">+0.5</button>
+                    <button class="quantity-btn plus-1" data-id="${material.id}">+1</button>
+                </div>
+            `;
+            
+            return div;
+        }
+        
+        function updateQuantityDisplay() {
+            updateQuantityList('a');
+            updateQuantityList('b');
+        }
+        
+        function updateQuantityList(layer) {
+            const list = $(`#quantity-list-${layer}`);
+            const materials = appData.materials[layer];
+            
+            list.innerHTML = '';
+            materials.forEach(material => {
+                const item = document.createElement('div');
+                item.className = 'quantity-display-item';
+                item.innerHTML = `
+                    <span class="quantity-material-name">${material.name}</span>
+                    <span class="quantity-material-value">${material.quantity} 包</span>
+                `;
+                list.appendChild(item);
+            });
+        }
+        
+        function updateCalculations() {
+            let totalCostA = 0, totalWeightA = 0;
+            let totalCostB = 0, totalWeightB = 0;
+            
+            // 计算A层
+            appData.materials.a.forEach(material => {
+                const perKgPrice = material.unit === 'per-pack' ? material.price / 25 : material.price;
+                const weight = material.quantity * 25;
+                totalWeightA += weight;
+                totalCostA += perKgPrice * weight;
+            });
+            
+            // 计算B层
+            appData.materials.b.forEach(material => {
+                const perKgPrice = material.unit === 'per-pack' ? material.price / 25 : material.price;
+                const weight = material.quantity * 25;
+                totalWeightB += weight;
+                totalCostB += perKgPrice * weight;
+            });
+            
+            const perKgCostA = totalWeightA > 0 ? totalCostA / totalWeightA : 0;
+            const perKgCostB = totalWeightB > 0 ? totalCostB / totalWeightB : 0;
+            const totalCostPerTon = (perKgCostA * 400) + (perKgCostB * 600);
+            
+            // 保存当前总成本用于后续比较
+            appData.lastTotalCost = totalCostPerTon;
+            
+            $('#total-cost-a').textContent = `¥${totalCostA.toFixed(2)}`;
+            $('#total-cost-b').textContent = `¥${totalCostB.toFixed(2)}`;
+            $('#per-kg-cost-a').textContent = `¥${perKgCostA.toFixed(2)}`;
+            $('#per-kg-cost-b').textContent = `¥${perKgCostB.toFixed(2)}`;
+            $('#total-cost-per-ton').textContent = `¥${totalCostPerTon.toFixed(2)}`;
+            
+            saveData();
+        }
+        
+        // ========== 材料操作函数 ==========
+        function findMaterial(id) {
+            for (const material of appData.materials.a) {
+                if (material.id === id) return { material, layer: 'a' };
+            }
+            for (const material of appData.materials.b) {
+                if (material.id === id) return { material, layer: 'b' };
+            }
+            return null;
+        }
+        
+        function adjustQuantity(id, adjustment) {
+            const found = findMaterial(id);
+            if (found) {
+                found.material.quantity = Math.max(0, found.material.quantity + adjustment);
+                renderAll();
+            }
+        }
+        
+        function updateQuantity(id, quantity) {
+            const found = findMaterial(id);
+            if (found) {
+                found.material.quantity = Math.max(0, quantity);
+                renderAll();
+            }
+        }
+        
+        function deleteMaterial(id) {
+            for (let i = 0; i < appData.materials.a.length; i++) {
+                if (appData.materials.a[i].id === id) {
+                    appData.materials.a.splice(i, 1);
+                    renderAll();
+                    return;
+                }
+            }
+            for (let i = 0; i < appData.materials.b.length; i++) {
+                if (appData.materials.b[i].id === id) {
+                    appData.materials.b.splice(i, 1);
+                    renderAll();
+                    return;
+                }
+            }
+        }
+        
+        // ========== 事件处理函数 ==========
+        function handleClick(e) {
+            const target = e.target;
+            
+            // 编辑按钮
+            if (target.closest('.btn-edit')) {
+                const btn = target.closest('.btn-edit');
+                const id = parseInt(btn.dataset.id);
+                editMaterial(id);
+            }
+            
+            // 删除按钮
+            else if (target.closest('.btn-delete')) {
+                const btn = target.closest('.btn-delete');
+                const id = parseInt(btn.dataset.id);
+                if (confirm('确定要删除这个材料吗？')) {
+                    deleteMaterial(id);
+                }
+            }
+            
+            // 数量按钮
+            else if (target.closest('.quantity-btn')) {
+                const btn = target.closest('.quantity-btn');
+                const id = parseInt(btn.dataset.id);
+                
+                if (btn.classList.contains('minus-1')) {
+                    adjustQuantity(id, -1);
+                } else if (btn.classList.contains('plus-1')) {
+                    adjustQuantity(id, 1);
+                } else if (btn.classList.contains('minus-0.5')) {
+                    adjustQuantity(id, -0.5);
+                } else if (btn.classList.contains('plus-0.5')) {
+                    adjustQuantity(id, 0.5);
+                }
+            }
+            
+            // 批量添加删除行
+            else if (target.closest('.batch-add-remove')) {
+                const row = target.closest('.batch-add-row');
+                if (row) {
+                    row.remove();
+                    updateBatchRemoveButtons();
+                }
+            }
+            
+            // 单位选项
+            else if (target.classList.contains('unit-option')) {
+                const parent = target.parentElement;
+                const options = parent.querySelectorAll('.unit-option');
+                options.forEach(opt => opt.classList.remove('active'));
+                target.classList.add('active');
+                
+                // 单价切换
+                if (parent.id === 'unit-toggle') {
+                    appData.unitType = target.dataset.unit;
+                    renderAll();
+                }
+                
+                // 批量编辑范围切换
+                else if (parent.id === 'batch-edit-scope') {
+                    updateBatchEditList();
+                }
+                
+                // 批量添加方法切换
+                else if (parent.id === 'batch-add-method') {
+                    const layerGroup = $('#batch-add-layer-group');
+                    layerGroup.style.display = target.dataset.method === 'both' ? 'none' : 'block';
+                }
+            }
+        }
+        
+        function handleInput(e) {
+            const target = e.target;
+            
+            // 数量输入框 - 实时更新
+            if (target.classList.contains('quantity-input')) {
+                const id = parseInt(target.dataset.id);
+                const value = parseFloat(target.value) || 0;
+                updateQuantity(id, value);
+            }
+        }
+        
+        // ========== 模态框操作 ==========
+        function openMaterialModal(layer) {
+            $('#modal-title').textContent = '添加新材料';
+            $('#material-form').reset();
+            delete $('#material-form').dataset.editingId;
+            
+            // 设置所属层选项
+            $$('#layer-toggle .unit-option').forEach(option => {
+                option.classList.toggle('active', option.dataset.layer === layer);
+            });
+            
+            updatePriceDisplay(0);
+            showModal('#material-modal');
+        }
+        
+        function editMaterial(id) {
+            const found = findMaterial(id);
+            if (!found) return;
+            
+            const { material, layer } = found;
+            
+            $('#modal-title').textContent = '编辑材料';
+            $('#material-name').value = material.name;
+            $('#material-price').value = material.price;
+            $('#material-description').value = material.description || '';
+            
+            // 设置所属层选项
+            $$('#layer-toggle .unit-option').forEach(option => {
+                option.classList.toggle('active', option.dataset.layer === layer);
+            });
+            
+            updatePriceDisplay(material.price);
+            showModal('#material-modal');
+            
+            // 设置当前编辑的材料ID
+            $('#material-form').dataset.editingId = id;
+        }
+        
+        function updatePriceDisplay(price) {
+            const display = $('#price-unit-display');
+            if (appData.unitType === 'per-kg') {
+                display.textContent = `元/公斤 (自动计算：¥${(price * 25).toFixed(2)}/包)`;
+            } else {
+                display.textContent = `元/包 (自动计算：¥${(price / 25).toFixed(2)}/公斤)`;
+            }
+        }
+        
+        function saveMaterial() {
+            const name = $('#material-name').value.trim();
+            const price = parseFloat($('#material-price').value);
+            const description = $('#material-description').value.trim();
+            const layer = $('#layer-toggle .unit-option.active').dataset.layer;
+            const editingId = $('#material-form').dataset.editingId;
+            
+            if (!name || isNaN(price)) {
+                alert('请填写完整的材料信息');
+                return;
+            }
+            
+            if (editingId) {
+                // 编辑现有材料
+                const found = findMaterial(parseInt(editingId));
+                if (found) {
+                    found.material.name = name;
+                    found.material.price = price;
+                    found.material.description = description;
+                    found.material.unit = appData.unitType;
+                    
+                    // 如果更改了层，需要移动
+                    if (found.layer !== layer) {
+                        // 从原层删除
+                        if (found.layer === 'a') {
+                            const index = appData.materials.a.findIndex(m => m.id === parseInt(editingId));
+                            if (index !== -1) appData.materials.a.splice(index, 1);
+                        } else {
+                            const index = appData.materials.b.findIndex(m => m.id === parseInt(editingId));
+                            if (index !== -1) appData.materials.b.splice(index, 1);
+                        }
+                        
+                        // 添加到新层
+                        if (layer === 'a') {
+                            appData.materials.a.push(found.material);
+                        } else {
+                            appData.materials.b.push(found.material);
+                        }
+                    }
+                }
+            } else {
+                // 添加新材料
+                const newMaterial = {
+                    id: appData.nextId++,
+                    name,
+                    price,
+                    description,
+                    quantity: 1,
+                    unit: appData.unitType
+                };
+                
+                if (layer === 'a') {
+                    appData.materials.a.push(newMaterial);
+                } else {
+                    appData.materials.b.push(newMaterial);
+                }
+            }
+            
+            hideModal('#material-modal');
+            renderAll();
+        }
+        
+        // ========== 批量编辑 ==========
+        function openBatchEditModal() {
+            updateBatchEditList();
+            showModal('#batch-edit-modal');
+        }
+        
+        function updateBatchEditList() {
+            const list = $('#batch-edit-list');
+            const scope = $('#batch-edit-scope .unit-option.active').dataset.scope;
+            
+            list.innerHTML = '';
+            let materials = [];
+            
+            if (scope === 'all' || scope === 'layer-a' || scope === 'same-name') {
+                appData.materials.a.forEach(material => {
+                    materials.push({...material, layer: 'a'});
+                });
+            }
+            if (scope === 'all' || scope === 'layer-b' || scope === 'same-name') {
+                appData.materials.b.forEach(material => {
+                    materials.push({...material, layer: 'b'});
+                });
+            }
+            
+            if (scope === 'same-name') {
+                // 只保留在A和B层都有的同名材料
+                const nameMap = {};
+                materials.forEach(material => {
+                    const name = material.name;
+                    if (!nameMap[name]) nameMap[name] = [];
+                    nameMap[name].push(material);
+                });
+                
+                materials = [];
+                Object.values(nameMap).forEach(materialList => {
+                    if (materialList.length > 1) {
+                        materials.push(...materialList);
+                    }
+                });
+            }
+            
+            if (materials.length === 0) {
+                list.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">没有符合条件的材料</div>';
+                return;
+            }
+            
+            materials.forEach(material => {
+                const item = document.createElement('div');
+                item.className = 'batch-edit-item';
+                item.innerHTML = `
+                    <div class="batch-edit-info">
+                        <div class="batch-edit-name">${material.name}</div>
+                        <div class="batch-edit-layer">${material.layer === 'a' ? 'A层' : 'B层'}</div>
+                    </div>
+                    <input type="number" class="batch-edit-input" value="${material.price}" step="0.01" data-id="${material.id}" data-layer="${material.layer}">
+                `;
+                list.appendChild(item);
+            });
+        }
+        
+        function applyBatchEdit() {
+            const method = $('#batch-edit-method .unit-option.active').dataset.method;
+            const value = parseFloat($('#batch-edit-value').value) || 0;
+            const inputs = $$('.batch-edit-input');
+            
+            inputs.forEach(input => {
+                const id = parseInt(input.dataset.id);
+                const layer = input.dataset.layer;
+                
+                let material = null;
+                if (layer === 'a') {
+                    material = appData.materials.a.find(m => m.id === id);
+                } else {
+                    material = appData.materials.b.find(m => m.id === id);
+                }
+                
+                if (material) {
+                    if (method === 'percentage') {
+                        material.price = material.price * (1 + value / 100);
+                    } else {
+                        const newPrice = parseFloat(input.value) || 0;
+                        material.price = newPrice + value;
+                    }
+                }
+            });
+            
+            hideModal('#batch-edit-modal');
+            renderAll();
+            alert('批量编辑完成！');
+        }
+        
+        // ========== 批量添加 ==========
+        function openBatchAddModal() {
+            const area = $('#batch-add-area');
+            area.innerHTML = `
+                <div class="batch-add-row">
+                    <input type="text" class="batch-add-input name-input" placeholder="材料名称">
+                    <input type="number" class="batch-add-input price-input" placeholder="单价" step="0.01">
+                    <button type="button" class="batch-add-remove" style="display: none;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            
+            showModal('#batch-add-modal');
+        }
+        
+        function addMoreBatchRow() {
+            const area = $('#batch-add-area');
+            const newRow = document.createElement('div');
+            newRow.className = 'batch-add-row';
+            newRow.innerHTML = `
+                <input type="text" class="batch-add-input name-input" placeholder="材料名称">
+                <input type="number" class="batch-add-input price-input" placeholder="单价" step="0.01">
+                <button type="button" class="batch-add-remove">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            area.appendChild(newRow);
+            
+            updateBatchRemoveButtons();
+        }
+        
+        function updateBatchRemoveButtons() {
+            const rows = $$('.batch-add-row');
+            const removeButtons = $$('.batch-add-remove');
+            
+            removeButtons.forEach(button => {
+                button.style.display = rows.length <= 1 ? 'none' : 'flex';
+            });
+        }
+        
+        function applyBatchAdd() {
+            const method = $('#batch-add-method .unit-option.active').dataset.method;
+            let layer = 'a';
+            if (method === 'single') {
+                const activeLayer = $('#batch-add-layer .unit-option.active');
+                if (activeLayer) layer = activeLayer.dataset.layer;
+            }
+            
+            const rows = $$('.batch-add-row');
+            let addedCount = 0;
+            
+            rows.forEach(row => {
+                const nameInput = row.querySelector('.name-input');
+                const priceInput = row.querySelector('.price-input');
+                
+                const name = nameInput.value.trim();
+                const price = parseFloat(priceInput.value);
+                
+                if (name && !isNaN(price)) {
+                    if (method === 'both') {
+                        appData.materials.a.push({
+                            id: appData.nextId++,
+                            name: name,
+                            price: price,
+                            description: '',
+                            quantity: 1,
+                            unit: appData.unitType
+                        });
+                        
+                        appData.materials.b.push({
+                            id: appData.nextId++,
+                            name: name,
+                            price: price,
+                            description: '',
+                            quantity: 1,
+                            unit: appData.unitType
+                        });
+                        
+                        addedCount += 2;
+                    } else {
+                        const newMaterial = {
+                            id: appData.nextId++,
+                            name: name,
+                            price: price,
+                            description: '',
+                            quantity: 1,
+                            unit: appData.unitType
+                        };
+                        
+                        if (layer === 'a') {
+                            appData.materials.a.push(newMaterial);
+                        } else {
+                            appData.materials.b.push(newMaterial);
+                        }
+                        
+                        addedCount++;
+                    }
+                }
+            });
+            
+            if (addedCount > 0) {
+                hideModal('#batch-add-modal');
+                renderAll();
+                alert(`成功添加了 ${addedCount} 个材料！`);
+            } else {
+                alert('请至少填写一个有效的材料信息！');
+            }
+        }
+        
+        // ========== 其他功能 ==========
+        function resetData() {
+            if (confirm('确定要重置所有数据吗？这将清除所有材料信息。')) {
+                localStorage.removeItem('materialCalculator');
+                appData.materials = { a: [], b: [] };
+                appData.nextId = 1;
+                appData.lastTotalCost = 0;
+                initSampleData();
+                renderAll();
+                alert('数据已重置！');
+            }
+        }
+        
+        function exportData() {
+            const data = {
+                unitType: appData.unitType,
+                materials: appData.materials,
+                nextId: appData.nextId,
+                exportDate: new Date().toISOString()
+            };
+            
+            const dataStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `材料成本数据_${new Date().toLocaleDateString().replace(/\//g, '-')}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            alert('数据已导出为JSON文件！');
+        }
+        
+        // ========== 初始化应用 ==========
+        function initApp() {
+            // 加载数据
+            if (!loadData()) {
+                initSampleData();
+            }
+            
+            // 渲染界面
+            renderAll();
+            
+            // 绑定事件
+            document.addEventListener('click', handleClick);
+            document.addEventListener('input', handleInput);
+            
+            // 绑定按钮事件
+            $('#add-material-a').addEventListener('click', () => openMaterialModal('a'));
+            $('#add-material-b').addEventListener('click', () => openMaterialModal('b'));
+            $('#batch-edit-btn').addEventListener('click', openBatchEditModal);
+            $('#batch-add-btn').addEventListener('click', openBatchAddModal);
+            $('#reset-btn').addEventListener('click', resetData);
+            $('#export-btn').addEventListener('click', exportData);
+            $('#cancel-btn').addEventListener('click', () => hideModal('#material-modal'));
+            $('#batch-edit-cancel-btn').addEventListener('click', () => hideModal('#batch-edit-modal'));
+            $('#batch-add-cancel-btn').addEventListener('click', () => hideModal('#batch-add-modal'));
+            $('#add-more-btn').addEventListener('click', addMoreBatchRow);
+            
+            // 表单提交
+            $('#material-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                saveMaterial();
+            });
+            
+            $('#batch-edit-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                applyBatchEdit();
+            });
+            
+            $('#batch-add-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                applyBatchAdd();
+            });
+            
+            // 价格输入时更新显示
+            $('#material-price').addEventListener('input', () => {
+                const price = parseFloat($('#material-price').value) || 0;
+                updatePriceDisplay(price);
+            });
+            
+            console.log('应用初始化完成');
+        }
+        
+        // 启动应用
+        window.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>
